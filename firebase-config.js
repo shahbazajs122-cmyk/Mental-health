@@ -1,7 +1,6 @@
 // Replace these values with Firebase Console > Project settings > Your apps > Web app config.
 export const firebaseConfig = {
-  const firebaseConfig = {
-  apiKey: "AIzaSyDbLv3zOva1zuwG7mXQP_p8bv44-6_uXMc",
+apiKey: "AIzaSyDbLv3zOva1zuwG7mXQP_p8bv44-6_uXMc",
   authDomain: "dr-samavia-clinic-240b8.firebaseapp.com",
   projectId: "dr-samavia-clinic-240b8",
   storageBucket: "dr-samavia-clinic-240b8.firebasestorage.app",
