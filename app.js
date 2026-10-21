@@ -1,13 +1,32 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInAnonymously,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getFirestore,collection,addDoc,doc,updateDoc,onSnapshot,query,where,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import {getStorage,ref,uploadBytes,getDownloadURL} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 import {firebaseConfig,ADMIN_UID} from './firebase-config.js';
-const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),storage=getStorage(app),$=id=>document.getElementById(id);let mode='',unsubClient=()=>{},unsubAdmin=()=>{};const msg=s=>{$('message').textContent=s};const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app)$=id=>document.getElementById(id);let mode='',unsubClient=()=>{},unsubAdmin=()=>{};const msg=s=>{$('message').textContent=s};const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function show(which){$('client').classList.toggle('hidden',which!=='client');$('admin').classList.toggle('hidden',which!=='admin');msg('')} $('clientNav').onclick=()=>show('client');$('adminNav').onclick=()=>show('admin');
 function choose(t){mode=t;$('bookingForm').classList.remove('hidden');$('typeInfo').textContent=t==='Online'?'Online consultation by WhatsApp voice call. Admin will assign your time.':'Physical consultation at Arshad General Hospital, near Discount Mart, Bijligar Road, Mardan. Admin will assign your time.';$('bookingForm').scrollIntoView({behavior:'smooth'})} $('online').onclick=()=>choose('Online');$('physical').onclick=()=>choose('Physical');document.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.copy);msg('Copied.')}catch{msg('Please select and copy the displayed details.')}});
 const types=['image/jpeg','image/png','image/webp','application/pdf'];$('bookingForm').onsubmit=async e=>{e.preventDefault();if(!mode)return msg('Select a consultation type.');const user=auth.currentUser;if(!user||!user.isAnonymous)return msg('Client connection unavailable. Please reload the page.');const file=$('receipt').files[0];if(!file||!types.includes(file.type)||file.size>5*1024*1024)return msg('Please attach a JPG, PNG, WEBP or PDF receipt under 5 MB.');const b=$('submitBooking');b.disabled=true;msg('Uploading receipt and sending request...');try{const f=new FormData(e.target),path=`receipts/${user.uid}/${crypto.randomUUID()}/${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;await uploadBytes(ref(storage,path),file,{contentType:file.type});const r=await addDoc(collection(db,'bookings'),{clientUid:user.uid,name:String(f.get('name')).trim(),phone:String(f.get('phone')).trim(),email:String(f.get('email')).trim(),reason:String(f.get('reason')).trim(),type:mode,method:String(f.get('method')),transaction:String(f.get('transaction')).trim(),receiptPath:path,receiptType:file.type,status:'Pending',paymentStatus:'Pending verification',appointmentAt:'',adminNote:'',createdAt:serverTimestamp()});e.target.reset();e.target.classList.add('hidden');msg(`Request sent successfully. Reference: ${r.id}. Admin will decide your appointment timing.`)}catch(err){msg('Could not submit: '+err.message)}finally{b.disabled=false}};
-$('loginForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{const c=await signInWithEmailAndPassword(auth,String(f.get('email')),String(f.get('password')));if(c.user.uid!==ADMIN_UID){await signOut(auth);throw Error('This account is not authorized as admin.')}msg('Admin signed in.')}catch(err){msg(err.message)}};$('logout').onclick=async()=>{await signOut(auth);show('client')};
+$('loginForm').onsubmit=async e=>{e.preventDefault();const f = new FormData(e.target);
+
+const uploadData = new FormData();
+uploadData.append('file', file);
+uploadData.append('upload_preset', 'dr_samavia_receipts');
+
+const uploadResponse = await fetch(
+  'https://api.cloudinary.com/v1_1/aqlutpii/auto/upload',
+  { method: 'POST', body: uploadData }
+);
+
+const uploaded = await uploadResponse.json();
+
+if (!uploadResponse.ok || !uploaded.secure_url) {
+  throw new Error(uploaded.error?.message || 'Receipt upload failed.');
+}
+
+const receiptUrl = uploaded.secure_url;
+constreceiptPath: path,
+receiptUrl: receiptUrl,
+receiptType: file.type,/${user.uid}/${crypto.randomUUID()}/${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
 $('enableNotifications').onclick=async()=>{if(!('Notification' in window))return msg('Browser alerts unavailable. Check your status on this page.');const permission=await Notification.requestPermission();msg(permission==='granted'?'Browser alerts enabled.':'Status updates will still appear on this page.')};
 let initializedClient=false;const seenStatuses=new Map();
 function listenClient(u){unsubClient();initializedClient=false;seenStatuses.clear();const q=query(collection(db,'bookings'),where('clientUid','==',u.uid));unsubClient=onSnapshot(q,s=>{const changes=[];s.docs.forEach(d=>{const x=d.data(),prior=seenStatuses.get(d.id);if(initializedClient&&prior&&prior!==x.status&&['Confirmed','Declined'].includes(x.status))changes.push(`${x.status}: ${x.type} appointment${x.appointmentAt?' at '+x.appointmentAt+' (Pakistan time)':''}. ${x.adminNote||''}`);seenStatuses.set(d.id,x.status)});initializedClient=true;if(changes.length){$('notificationFeed').textContent=changes.join(' | ');if('Notification' in window&&Notification.permission==='granted')changes.forEach(t=>new Notification('Dr. Samavia – Appointment update',{body:t}));}$('tracking').classList.toggle('hidden',s.empty);$('myBookings').innerHTML=s.docs.map(d=>{const x=d.data();return `<div class="bank"><b>${esc(x.type)} consultation</b><p>Reference: <code>${esc(d.id)}</code></p><p>Booking: <span class="status">${esc(x.status)}</span></p><p>Payment: ${esc(x.paymentStatus)}</p><p>Confirmed date/time: ${esc(x.appointmentAt||'To be decided by admin')}</p><p>Admin note: ${esc(x.adminNote||'—')}</p></div>`}).join('')},e=>msg('Status error: '+e.message))}
